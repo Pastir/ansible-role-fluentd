@@ -1,0 +1,62 @@
+---
+- name: Add package repository
+  when: fluentd_repo_enabled
+  block:
+    - name: Create keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download repository key
+      ansible.builtin.get_url:
+        url: "{{ __fluentd.key_url }}"
+        dest: "{{ __fluentd.keyring }}"
+        mode: "0644"
+
+    - name: Add apt source
+      ansible.builtin.deb822_repository:
+        name: "{{ __fluentd.source_name }}"
+        types: [deb]
+        uris: ["{{ __fluentd.repo_url }}"]
+        suites: ["{{ fluentd_repo_release }}"]
+        components: [contrib]
+        signed_by: "{{ __fluentd.keyring }}"
+        install_python_debian: true
+      register: __fluentd_repo
+
+- name: Gather installed packages
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Refuse implicit version change
+  ansible.builtin.assert:
+    that:
+      - fluentd_allow_upgrade or ansible_facts.packages[__fluentd.package][0].version is match((fluentd_version | regex_escape) ~ '-')
+    fail_msg: >-
+      {{ __fluentd.package }} {{ ansible_facts.packages[__fluentd.package][0].version }} is installed,
+      {{ fluentd_version }} is required. Re-run with -e fluentd_allow_upgrade=true.
+    quiet: true
+  when:
+    - fluentd_version | length > 0
+    - __fluentd.package in ansible_facts.packages
+
+- name: Install package
+  ansible.builtin.apt:
+    name: "{{ __fluentd.package }}{{ ('=' ~ fluentd_version ~ '-*') if fluentd_version else '' }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ 0 if (__fluentd_repo is defined and __fluentd_repo is changed) else 3600 }}"
+    allow_change_held_packages: true
+
+- name: Hold package
+  ansible.builtin.dpkg_selections:
+    name: "{{ __fluentd.package }}"
+    selection: hold
+  when: fluentd_hold and not ansible_check_mode
+
+- name: Enable and start the service
+  ansible.builtin.systemd_service:
+    name: "{{ __fluentd.service }}"
+    enabled: "{{ fluentd_service_enabled }}"
+    state: started

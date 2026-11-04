@@ -1,0 +1,52 @@
+---
+- name: Check installed gems
+  ansible.builtin.command: >-
+    {{ __fluentd.gem }} list --installed {{ item.name }}
+    {{ ('--version ' ~ item.version) if item.version is defined else '' }}
+  loop: "{{ __fluentd_gems }}"
+  loop_control:
+    label: "{{ item.name }} {{ item.version | default('') }}"
+  register: __fluentd_gem_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install gems
+  ansible.builtin.command: >-
+    {{ __fluentd.gem }} install {{ item.item.name }} --no-document
+    {{ ('-v ' ~ item.item.version) if item.item.version is defined else '' }}
+  loop: "{{ __fluentd_gem_check.results | rejectattr('stdout', 'equalto', 'true') | list }}"
+  loop_control:
+    label: "{{ item.item.name }} {{ item.item.version | default('') }}"
+  changed_when: true
+  notify: Restart fluentd
+
+- name: Create plugin directory
+  ansible.builtin.file:
+    path: "{{ __fluentd.conf_dir }}/plugin"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install bundled GELF output plugin
+  ansible.builtin.copy:
+    src: out_gelf.rb
+    dest: "{{ __fluentd.conf_dir }}/plugin/out_gelf.rb"
+    owner: root
+    group: root
+    mode: "0644"
+  when: fluentd_gelf_plugin
+  notify: Restart fluentd
+
+- name: Install plugin files
+  ansible.builtin.copy:
+    dest: "{{ __fluentd.conf_dir }}/plugin/{{ item.name }}"
+    content: "{{ item.content }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ fluentd_plugin_files }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Restart fluentd

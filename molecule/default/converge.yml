@@ -1,0 +1,12 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  pre_tasks:
+    - name: Output directory writable by the service user
+      ansible.builtin.file:
+        path: /var/log/fluent-molecule
+        state: directory
+        mode: "0777"
+  roles:
+    - role: pastir.fluentd

@@ -1,0 +1,78 @@
+---
+- name: Write configuration and dry-run it
+  block:
+    - name: Create conf.d directory
+      ansible.builtin.file:
+        path: "{{ __fluentd.conf_dir }}/conf.d"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Write main config
+      ansible.builtin.copy:
+        dest: "{{ __fluentd.conf_file }}"
+        content: "{{ '# Managed by Ansible (pastir.fluentd), do not edit.\n' ~ fluentd_config }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: __fluentd_main
+
+    - name: Write conf.d files
+      ansible.builtin.copy:
+        dest: "{{ __fluentd.conf_dir }}/conf.d/{{ item.name }}"
+        content: "{{ '# Managed by Ansible (pastir.fluentd), do not edit.\n' ~ item.content }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      loop: "{{ __fluentd_config_files_present }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: __fluentd_files
+
+    - name: Remove conf.d files marked absent
+      ansible.builtin.file:
+        path: "{{ __fluentd.conf_dir }}/conf.d/{{ item.name }}"
+        state: absent
+      loop: "{{ __fluentd_config_files_absent }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: __fluentd_removed
+
+    # Loads every plugin and parses the whole configuration without starting.
+    - name: Dry-run the configuration
+      ansible.builtin.command: "{{ __fluentd.bin }} --dry-run -c {{ __fluentd.conf_file }} -p {{ __fluentd.conf_dir }}/plugin"
+      # Runs only when a file changed; "changed" is what triggers the reload handler.
+      changed_when: true
+      check_mode: false
+      when: __fluentd_main is changed or __fluentd_files is changed or __fluentd_removed is changed
+      notify: Reload fluentd
+
+  rescue:
+    - name: Restore previous files
+      ansible.builtin.copy:
+        src: "{{ item.backup_file }}"
+        dest: "{{ item.dest }}"
+        remote_src: true
+        mode: "0644"
+      loop: "{{ ([__fluentd_main | default({})] + (__fluentd_files.results | default([]))) | selectattr('backup_file', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Remove files that did not exist before
+      ansible.builtin.file:
+        path: "{{ item.dest }}"
+        state: absent
+      loop: >-
+        {{ (__fluentd_files.results | default([])) | selectattr('changed', 'defined') | selectattr('changed')
+           | rejectattr('backup_file', 'defined') | selectattr('dest', 'defined') | list }}
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Fail with the Fluentd error
+      ansible.builtin.fail:
+        msg: >-
+          Fluentd configuration was not applied, previous files restored:
+          {{ ansible_failed_result.stdout | default('') }} {{ ansible_failed_result.stderr | default(ansible_failed_result.msg) | default('') }}

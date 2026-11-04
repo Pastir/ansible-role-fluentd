@@ -1,0 +1,25 @@
+---
+- name: A broken config is rolled back
+  hosts: all
+  become: true
+  tasks:
+    - name: Broken config must be rejected
+      block:
+        - name: Apply a broken output
+          ansible.builtin.include_role:
+            name: pastir.fluentd
+          vars:
+            fluentd_config_files:
+              - name: output.conf
+                content: |
+                  <match test.**>
+                    @type no_such_plugin_type
+                  </match>
+
+        - name: Must not get here
+          ansible.builtin.fail:
+            msg: broken config accepted
+      rescue:
+        - name: Previous output config is back
+          ansible.builtin.command: grep -q '@type file' /etc/{{ 'td-agent' if fluentd_package | default('') == 'td-agent' else 'fluent' }}/conf.d/output.conf
+          changed_when: false

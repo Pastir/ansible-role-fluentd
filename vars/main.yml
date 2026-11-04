@@ -1,0 +1,32 @@
+---
+__fluentd_layouts:
+  fluent-package:
+    package: fluent-package
+    service: fluentd
+    conf_dir: /etc/fluent
+    conf_file: /etc/fluent/fluentd.conf
+    bin: /opt/fluent/bin/fluentd
+    gem: /opt/fluent/bin/fluent-gem
+    user: _fluentd
+    repo_url: "https://fluentd.cdn.cncf.io/lts/{{ fluentd_lts_major }}/ubuntu/{{ fluentd_repo_release }}/"
+    key_url: https://fluentd.cdn.cncf.io/GPG-KEY-fluent-package
+    keyring: /etc/apt/keyrings/fluent-package.asc
+    source_name: fluent-package
+  td-agent:
+    package: td-agent
+    service: td-agent
+    conf_dir: /etc/td-agent
+    conf_file: /etc/td-agent/td-agent.conf
+    bin: /opt/td-agent/bin/fluentd
+    gem: /opt/td-agent/bin/fluent-gem
+    user: td-agent
+    repo_url: "https://packages.treasuredata.com/4/ubuntu/{{ fluentd_repo_release }}/"
+    key_url: https://packages.treasuredata.com/GPG-KEY-td-agent
+    keyring: /etc/apt/keyrings/td-agent.asc
+    source_name: fluentd
+__fluentd: "{{ __fluentd_layouts[fluentd_package] }}"
+__fluentd_gems: >-
+  {{ fluentd_gems + ([{'name': 'gelf', 'version': fluentd_gelf_gem_version}] if fluentd_gelf_plugin else []) }}
+__fluentd_config_files_present: "{{ fluentd_config_files | rejectattr('state', 'defined') | list
+  + (fluentd_config_files | selectattr('state', 'defined') | selectattr('state', 'equalto', 'present') | list) }}"
+__fluentd_config_files_absent: "{{ fluentd_config_files | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent') | list }}"

@@ -1,0 +1,21 @@
+---
+- name: Validate input
+  ansible.builtin.assert:
+    that:
+      - fluentd_package in ['fluent-package', 'td-agent']
+      - fluentd_config_files | rejectattr('name', 'defined') | list | length == 0
+    fail_msg: fluentd_package must be fluent-package or td-agent; every fluentd_config_files item needs a name.
+    quiet: true
+  tags: [fluentd, fluentd_install, fluentd_config]
+
+- name: Install Fluentd
+  ansible.builtin.import_tasks: install.yml
+  tags: [fluentd, fluentd_install]
+
+- name: Install plugins
+  ansible.builtin.import_tasks: plugins.yml
+  tags: [fluentd, fluentd_install, fluentd_plugins]
+
+- name: Configure Fluentd
+  ansible.builtin.import_tasks: configure.yml
+  tags: [fluentd, fluentd_config]

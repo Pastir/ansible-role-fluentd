@@ -1,0 +1,67 @@
+---
+# fluent-package LTS 6 on 24.04 and 26.04; legacy td-agent v4 (jammy build) on 24.04.
+dependency:
+  name: galaxy
+  enabled: false
+driver:
+  name: podman
+platforms:
+  - name: fluent-noble
+    image: docker.io/library/ubuntu:24.04
+    dockerfile: Dockerfile.j2
+    command: /lib/systemd/systemd
+    systemd: always
+  - name: fluent-resolute
+    image: docker.io/library/ubuntu:26.04
+    dockerfile: Dockerfile.j2
+    command: /lib/systemd/systemd
+    systemd: always
+  - name: tdagent-noble
+    image: docker.io/library/ubuntu:24.04
+    dockerfile: Dockerfile.j2
+    command: /lib/systemd/systemd
+    systemd: always
+provisioner:
+  name: ansible
+  inventory:
+    group_vars:
+      all:
+        fluentd_gelf_plugin: true
+        fluentd_config_files:
+          - name: input.conf
+            content: |
+              <source>
+                @type http
+                port 18888
+                bind 127.0.0.1
+              </source>
+          - name: output.conf
+            content: |
+              <match test.**>
+                @type file
+                path /var/log/fluent-molecule/out
+                <buffer>
+                  flush_mode immediate
+                </buffer>
+              </match>
+              <match graylog.**>
+                @type gelf
+                host 127.0.0.1
+                port 12201
+                protocol udp
+              </match>
+    host_vars:
+      tdagent-noble:
+        fluentd_package: td-agent
+        fluentd_version: "4.5.2"
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - destroy
+verifier:
+  name: ansible

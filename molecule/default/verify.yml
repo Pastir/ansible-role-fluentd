@@ -1,0 +1,34 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Send an event to the http input
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18888/test.molecule
+        method: POST
+        body_format: json
+        body: {message: hello}
+      register: __post
+      until: __post.status == 200
+      retries: 15
+      delay: 2
+
+    - name: Event reached the file output
+      ansible.builtin.shell: |
+        set -o pipefail
+        cat /var/log/fluent-molecule/out*.log | grep -q '"message":"hello"'
+      args:
+        executable: /bin/bash
+      register: __out
+      until: __out.rc == 0
+      retries: 15
+      delay: 2
+      changed_when: false
+
+    - name: GELF event is accepted (plugin loaded)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18888/graylog.molecule
+        method: POST
+        body_format: json
+        body: {message: to-graylog}

@@ -1,0 +1,33 @@
+---
+# Fluentd log collector, packaged either as
+#   fluent-package  - current LTS (default), https://fluentd.cdn.cncf.io/lts/<major>/
+#   td-agent        - legacy td-agent v4 (EOL, built up to Ubuntu 22.04), only for hosts that still run it
+fluentd_package: fluent-package
+# Exact package version. Empty -> latest in the repository.
+fluentd_version: "6.0.5"
+fluentd_hold: true
+fluentd_allow_upgrade: false
+
+fluentd_repo_enabled: true
+# fluent-package LTS major (repository path).
+fluentd_lts_major: "6"
+# Repository suite; td-agent v4 has no builds newer than jammy.
+fluentd_repo_release: "{{ 'jammy' if fluentd_package == 'td-agent' else ansible_facts['distribution_release'] }}"
+
+# --- Configuration ------------------------------------------------------------------
+# Main config file content. It should @include the conf.d directory (see default).
+fluentd_config: |
+  @include {{ __fluentd.conf_dir }}/conf.d/*.conf
+# Files in <conf_dir>/conf.d: [{name: app.conf, content: "..."}, {name: old.conf, state: absent}]
+fluentd_config_files: []
+
+# --- Plugins -----------------------------------------------------------------------------
+# Ruby gems installed with fluent-gem / td-agent-gem: [{name: gelf, version: "3.1.0"}]
+fluentd_gems: []
+# Plugin files copied to <conf_dir>/plugin: [{name: out_x.rb, content: "..."}]
+fluentd_plugin_files: []
+# Install the bundled GELF output plugin (out_gelf.rb, type "gelf") and its "gelf" gem.
+fluentd_gelf_plugin: false
+fluentd_gelf_gem_version: "3.1.0"
+
+fluentd_service_enabled: true

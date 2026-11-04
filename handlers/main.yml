@@ -1,0 +1,12 @@
+---
+# New plugins/gems are only loaded at process start.
+- name: Restart fluentd
+  ansible.builtin.systemd_service:
+    name: "{{ __fluentd.service }}"
+    state: restarted
+
+# Graceful reload (SIGUSR2): configuration is re-read, buffers are kept.
+- name: Reload fluentd
+  ansible.builtin.systemd_service:
+    name: "{{ __fluentd.service }}"
+    state: reloaded
